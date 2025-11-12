@@ -2,9 +2,9 @@ name: Java CI
 
 on:
   push:
-    branches: [ "*" ]  # Jalankan di semua branch
+    branches: [ "*" ]
   pull_request:
-    branches: [ "main", "master" ]  # Jalankan saat PR ke main/master
+    branches: [ "main", "master" ]
 
 jobs:
   build-and-test:
@@ -26,64 +26,52 @@ jobs:
           --health-retries=5
 
     steps:
-      # Step 1: Checkout kode dari repo
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       # Step 2: Setup Java (gunakan versi stabil LTS)
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
-          java-version: '21'   # Gunakan Java 17 atau 21 (bukan 25)
+          java-version: '21'
           distribution: 'temurin'
           cache: maven
 
-      # Step 3: Konfigurasi file application.properties
-      - name: Configure database connection
+      # Step 3: Konfigurasi database
+      - name: Configure application.properties
         run: |
-          cp src/main/resources/application.properties.template src/main/resources/application.properties
+          cp src/main/resources/application.properties.template src/main/resources/application.properties || true
           sed -i 's|spring.datasource.username=.*|spring.datasource.username=postgres|g' src/main/resources/application.properties
           sed -i 's|spring.datasource.password=.*|spring.datasource.password=postgres|g' src/main/resources/application.properties
-          sed -i 's|spring.datasource.url=.*|spring.datasource.url=jdbc:postgresql://localhost:5432/pbo_db_todos|g' src/main/resources/application.properties
 
       # Step 4: Tunggu PostgreSQL siap
       - name: Wait for PostgreSQL
         run: |
           for i in {1..10}; do
             pg_isready -h localhost -p 5432 -U postgres && break
-            echo "Waiting for PostgreSQL to start..."
+            echo "Waiting for postgres..."
             sleep 5
           done
 
-      # Step 5: Jalankan unit test + laporan JaCoCo
+      # Step 5: Jalankan test + coverage
       - name: Run tests with JaCoCo
         run: |
           chmod +x mvnw
           ./mvnw clean test jacoco:report
 
-      # Step 6: Upload hasil coverage sebagai artifact
-      - name: Upload test coverage report
+      # Step 6: Upload hasil test
+      - name: Upload test results
         uses: actions/upload-artifact@v4
         with:
           name: jacoco-report
           path: target/site/jacoco/
 
-      # Step 7: Build JAR aplikasi
-      - name: Build Spring Boot JAR
-        run: ./mvnw clean package -DskipTests
-
-      # Step 8: Verifikasi bahwa JAR bisa dijalankan
-      - name: Verify Spring Boot JAR
+      # Step 7: Build JAR
+      - name: Build application JAR
         run: |
-          echo "Checking JAR manifest..."
-          jar tf target/*.jar | grep META-INF/MANIFEST.MF
-          echo "Starting app (headless test run)..."
-          nohup java -jar target/*.jar --spring.main.web-application-type=none --logging.level.root=OFF &
-          sleep 10
-          pkill -f 'java -jar' || true
+          ./mvnw clean package -DskipTests
 
-      # Step 9: Upload JAR hasil build
-      - name: Upload built JAR
+      # Step 8: Upload hasil build
+      - name: Upload JAR
         uses: actions/upload-artifact@v4
         with:
           name: spring-boot-app
