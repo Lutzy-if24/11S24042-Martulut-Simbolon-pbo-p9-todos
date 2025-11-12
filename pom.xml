@@ -177,6 +177,5 @@
 					</rules>
 				</configuration>
 			</plugin>
-
 		</plugins>
 	</build>
