@@ -14,3 +14,4 @@ public class ApiResponseTests {
         assert (response.getData().equals("Data hasil"));
     }
 }
+//
