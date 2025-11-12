@@ -7,7 +7,7 @@ on:
     branches: [ "main", "master" ]
 
 jobs:
-  build-and-test:
+  test:
     runs-on: ubuntu-latest
 
     services:
@@ -28,22 +28,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Step 2: Setup Java (gunakan versi stabil LTS)
-      - name: Set up Java
+      - name: Setup Java 21
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
           cache: maven
 
-      # Step 3: Konfigurasi database
-      - name: Configure application.properties
+      - name: Copy and configure application.properties
         run: |
-          cp src/main/resources/application.properties.template src/main/resources/application.properties || true
+          cp src/main/resources/application.properties.template src/main/resources/application.properties
           sed -i 's|spring.datasource.username=.*|spring.datasource.username=postgres|g' src/main/resources/application.properties
           sed -i 's|spring.datasource.password=.*|spring.datasource.password=postgres|g' src/main/resources/application.properties
 
-      # Step 4: Tunggu PostgreSQL siap
       - name: Wait for PostgreSQL
         run: |
           for i in {1..10}; do
@@ -52,26 +49,37 @@ jobs:
             sleep 5
           done
 
-      # Step 5: Jalankan test + coverage
-      - name: Run tests with JaCoCo
+      # Jalankan unit test + coverage
+      - name: Run tests with coverage
         run: |
           chmod +x mvnw
-          ./mvnw clean test jacoco:report
+          ./mvnw clean test jacoco:check
 
-      # Step 6: Upload hasil test
-      - name: Upload test results
+      - name: Upload test report
         uses: actions/upload-artifact@v4
         with:
-          name: jacoco-report
+          name: test-results
           path: target/site/jacoco/
 
-      # Step 7: Build JAR
-      - name: Build application JAR
+      # 🔹 Tambahkan build JAR
+      - name: Build Spring Boot JAR
         run: |
           ./mvnw clean package -DskipTests
 
-      # Step 8: Upload hasil build
-      - name: Upload JAR
+      # 🔹 Verifikasi bahwa JAR memiliki manifest dan dapat dijalankan
+      - name: Verify executable JAR
+        run: |
+          echo "Checking manifest..."
+          jar tf target/*.jar | grep META-INF/MANIFEST.MF
+          jar xf target/*.jar META-INF/MANIFEST.MF
+          cat META-INF/MANIFEST.MF
+          echo "Testing java -jar startup..."
+          java -jar target/*.jar --spring.main.web-application-type=none --logging.level.root=OFF &
+          sleep 10
+          pkill -f 'java -jar' || true
+
+      # 🔹 Upload hasil build (opsional)
+      - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
         with:
           name: spring-boot-app
